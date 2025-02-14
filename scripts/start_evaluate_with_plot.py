@@ -21,8 +21,10 @@ def get_parser():
 def main():
 
     # set evaluation model path
-    eval_path = r'C:\Users\helei\Documents\GitHub\UAV_Navigation_DRL_AirSim\logs\SimpleAvoid\2022_09_06_15_05_SimpleMultirotor_No_CNN_SAC'
+    # eval_path = r'C:\Users\helei\Documents\GitHub\UAV_Navigation_DRL_AirSim\logs\SimpleAvoid\2022_09_06_15_05_SimpleMultirotor_No_CNN_SAC'
 
+    #eval_path = 'C:/RL_Project/UAV_Navigation_DRL_AirSim/logs/SimpleAvoid/2025_01_20_17_19_Multirotor_No_CNN_SAC'
+    eval_path = 'C:/RL_Project/UAV_Navigation_DRL_AirSim/logs/SimpleAvoid/2025_02_12_11_52_Multirotor_No_CNN_SAC'
     # select config file and model name
     config_file = eval_path + '/config/config.ini'
     # config_file = r"D:\OneDrive - mail.nwpu.edu.cn\Github\PhD-thesis-plot\CH3\3_1_simple_training_and_anaylysis\3_1_4_training_analysis_multi\data\2022_08_30_10_43_SimpleMultirotor_No_CNN_SAC\config\config.ini"

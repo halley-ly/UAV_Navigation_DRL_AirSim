@@ -106,7 +106,21 @@ class AirsimGymEnv(gym.Env, QtCore.QThread):
             self.work_space_x = [-220, 220]
             self.work_space_y = [-220, 220]
             self.work_space_z = [0, 100]
-            self.max_episode_steps = 800
+            self.max_episode_steps = 5000
+
+            # start_position = [0, 0, 50]
+            # goal_distance = 180
+            # self.dynamic_model.set_start(
+            #     start_position, random_angle=math.pi*2)
+            # self.dynamic_model.set_goal(
+            #     distance=goal_distance, random_angle=math.pi*2)
+            # self.work_space_x = [
+            #     start_position[0] - goal_distance - 10, start_position[0] + goal_distance + 10]
+            # self.work_space_y = [
+            #     start_position[1] - goal_distance - 10, start_position[1] + goal_distance + 10]
+            # self.work_space_z = [0, 100]
+            # self.max_episode_steps = 800
+
         elif self.env_name == 'Tree_200':
             # note: the start and end points will be covered by
             # update_start_and_goal_pose_random function
@@ -183,6 +197,11 @@ class AirsimGymEnv(gym.Env, QtCore.QThread):
                                                 shape=(1,
                                                        self.cnn_feature_length + self.state_feature_length),
                                                 dtype=np.float32)
+        elif self.perception_type == '3depth':
+          self.observation_space = spaces.Box(low=0, high=255,
+                                                shape=(3, self.screen_height,
+                                                        self.screen_width, 2),
+                                                dtype=np.uint8)
         else:
             self.observation_space = spaces.Box(low=0, high=255,
                                                 shape=(self.screen_height,
@@ -308,10 +327,22 @@ class AirsimGymEnv(gym.Env, QtCore.QThread):
             obs = self.get_obs_vector()
         elif self.perception_type == 'lgmd':
             obs = self.get_obs_lgmd()
+        elif self.perception_type == '3depth':
+            obs = self.get_last3_depth_image()
         else:
             obs = self.get_obs_image()
 
         return obs
+    
+    def get_last3_depth_image(self):
+        past_frames = []
+        N_FRAMES = 3  # 过去 3 帧
+        obs = self.get_obs_image()
+        past_frames.append(obs)
+        if len(past_frames) > N_FRAMES:
+            past_frames.pop(0)
+        return np.stack(past_frames, axis=0)
+
 
     def get_obs_image(self):
         # Normal mode: get depth image then transfer to matrix with state
@@ -421,6 +452,7 @@ class AirsimGymEnv(gym.Env, QtCore.QThread):
         self.feature_all = feature_all
 
         feature_all = np.reshape(feature_all, (1, len(feature_all)))
+        #print(feature_all.shape)
 
         return feature_all
 
@@ -475,7 +507,7 @@ class AirsimGymEnv(gym.Env, QtCore.QThread):
 
     def compute_reward(self, done, action):
         reward = 0
-        reward_reach = 10
+        reward_reach = 20
         reward_crash = -20
         reward_outside = -10
 
@@ -520,20 +552,24 @@ class AirsimGymEnv(gym.Env, QtCore.QThread):
 
     def compute_reward_final(self, done, action):
         reward = 0
-        reward_reach = 10
+        #暂且改为20看能不能实现导航
+        reward_reach = 20
+        #reward_reach = 10
         reward_crash = -20
         reward_outside = -10
         
         if self.env_name == 'NH_center':
-            distance_reward_coef = 500
-        else:
             distance_reward_coef = 50
+        else:
+            distance_reward_coef = 5
 
         if not done:
             # 1 - goal reward
             distance_now = self.get_distance_to_goal_3d()
-            reward_distance = distance_reward_coef * (self.previous_distance_from_des_point - distance_now) / \
-                self.dynamic_model.goal_distance   # normalized to 100 according to goal_distance
+            #验证归一化是否有必要
+            #reward_distance = distance_reward_coef * (self.previous_distance_from_des_point - distance_now) / \
+            #    self.dynamic_model.goal_distance   # normalized to 100 according to goal_distance
+            reward_distance = distance_reward_coef * (self.previous_distance_from_des_point - distance_now)
             self.previous_distance_from_des_point = distance_now
 
             # 2 - Position punishment
@@ -573,8 +609,13 @@ class AirsimGymEnv(gym.Env, QtCore.QThread):
 
             yaw_error = self.dynamic_model.state_raw[2]
             yaw_error_cost = abs(yaw_error / 90)
+            # 这里加大了距离奖励函数的权重，更好的实现导航任务
 
-            reward = reward_distance - 0.1 * punishment_pose - 0.2 * \
+            # 3 - 步长惩罚
+            #punishment_step = 2 * (self.step_num/self.max_episode_steps)
+
+
+            reward = 2*reward_distance - 0.1 * punishment_pose - 1 * \
                 punishment_obs - 0.1 * punishment_action - 0.5 * yaw_error_cost
         else:
             if self.is_in_desired_pose():

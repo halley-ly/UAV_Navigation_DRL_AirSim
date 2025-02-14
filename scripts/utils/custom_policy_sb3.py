@@ -34,6 +34,9 @@ Here we provide 5 feature extractor networks
 5. CNN_MobileNet
     Using a pre-trained MobileNet as feature generator
     finished by Flatten (576 -> 25)
+
+6. TransformerFeatureExtractor
+
 '''
 
 
@@ -57,26 +60,31 @@ class No_CNN(BaseFeaturesExtractor):
 
         # input size 80*100
         # divided by 5
+
         self.cnn = nn.Sequential(
-            nn.MaxPool2d(kernel_size=(16, 20)),
-            # nn.MaxPool2d(kernel_size=(26, 33)),
+            nn.MaxPool2d(kernel_size=(12, 18)),
+
+            #nn.MaxPool2d(kernel_size=(16, 20)),
+            #nn.MaxPool2d(kernel_size=(26, 33)),
             nn.Flatten()
         )
 
     def forward(self, observations: th.Tensor) -> th.Tensor:
         depth_img = observations[:, 0:1, :, :]
-
+        #print(depth_img.shape)
         cnn_feature = self.cnn(depth_img)  # [1, 25, 1, 1]
-        # print(cnn_feature)
-        # print(self.feature_num_state)
+        #print(cnn_feature)
+        #print(self.feature_num_state)
 
         state_feature = observations[:, 1, 0, 0:self.feature_num_state]
         # transfer state feature from 0~1 to -1~1
         # state_feature = state_feature*2 - 1
         # print(state_feature.size(), cnn_feature.size())
         x = th.cat((cnn_feature, state_feature), dim=1)
-        # print(x)
-        self.feature_all = x  # use  to update feature before FC
+        #print("custom_policy_NO_CNN:x.shape:",x.shape)
+        
+
+        self.feature_all = x  # use  to update feature before F
 
         return x
 
@@ -100,13 +108,13 @@ class CNN_GAP(BaseFeaturesExtractor):
         self.conv1 = nn.Sequential(
             nn.Conv2d(1, 8, kernel_size=3, stride=1, padding='same'),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2)  # [1, 8, 40, 48]
+            nn.MaxPool2d(2, 2)  # [1, 8, 40, 50]
         )
 
         self.conv2 = nn.Sequential(
             nn.Conv2d(8, 16, kernel_size=3, stride=1, padding='same'),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2),  # [1, 8, 20, 24]
+            nn.MaxPool2d(2, 2),  # [1, 16, 20, 25]
             # nn.BatchNorm2d(8, affine=False)
         )
 
@@ -114,7 +122,7 @@ class CNN_GAP(BaseFeaturesExtractor):
             nn.Conv2d(16, self.feature_num_cnn, kernel_size=3,
                       stride=1, padding='same'),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2),  # [1, 8, 10, 12]
+            nn.MaxPool2d(2, 2),  # [1, self.feature_num_cnn, 10, 12]
         )
         self.gap_layer = nn.AvgPool2d(kernel_size=(10, 12), stride=1)
 
@@ -139,14 +147,16 @@ class CNN_GAP(BaseFeaturesExtractor):
         # self.linear = self.cnn
 
     def forward(self, observations: th.Tensor) -> th.Tensor:
-        depth_img = observations[:, 0:1, :, :]
-
+        depth_img = observations[:, 0:1, :, :]  # [1, 1, 80, 100]
+        print("depth_img.shape",depth_img.shape)
         self.layer_1_out = self.conv1(depth_img)
         self.layer_2_out = self.conv2(self.layer_1_out)
         self.layer_3_out = self.conv3(self.layer_2_out)
         self.gap_layer_out = self.gap_layer(self.layer_3_out)
 
         cnn_feature = self.gap_layer_out  # [1, 8, 1, 1]
+        print("cnn_feature.shape:",cnn_feature.shape)
+
         cnn_feature = cnn_feature.squeeze(dim=3)  # [1, 8, 1]
         cnn_feature = cnn_feature.squeeze(dim=2)  # [1, 8]
         # cnn_feature = th.clamp(cnn_feature,-1,2)
@@ -157,6 +167,9 @@ class CNN_GAP(BaseFeaturesExtractor):
         # state_feature = state_feature*2 - 1
 
         x = th.cat((cnn_feature, state_feature), dim=1)
+        print("custom_policy_CNN_GAP:x.shape:",x.shape)
+
+
         self.feature_all = x  # use  to update feature before FC
 
         return x
@@ -182,14 +195,14 @@ class CNN_GAP_BN(BaseFeaturesExtractor):
             nn.Conv2d(1, 8, kernel_size=3, stride=1, padding='same'),
             nn.BatchNorm2d(8),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2)  # [1, 8, 40, 48]
+            nn.MaxPool2d(2, 2)  # [1, 8, 40, 50]
         )
 
         self.conv2 = nn.Sequential(
             nn.Conv2d(8, 16, kernel_size=3, stride=1, padding='same'),
             nn.BatchNorm2d(16),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2),  # [1, 8, 20, 24]
+            nn.MaxPool2d(2, 2),  # [1, 16, 20, 25]
             # nn.BatchNorm2d(8, affine=False)
         )
 
@@ -198,7 +211,7 @@ class CNN_GAP_BN(BaseFeaturesExtractor):
                       stride=1, padding='same'),
             nn.BatchNorm2d(self.feature_num_cnn),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2),  # [1, 8, 10, 12]
+            nn.MaxPool2d(2, 2),  # [1, self.feature_num_cnn, 10, 12]
         )
         self.gap_layer = nn.AvgPool2d(kernel_size=(10, 12), stride=1)
 
@@ -215,6 +228,7 @@ class CNN_GAP_BN(BaseFeaturesExtractor):
         cnn_feature = self.gap_layer_out  # [1, 8, 1, 1]
         cnn_feature = cnn_feature.squeeze(dim=3)  # [1, 8, 1]
         cnn_feature = cnn_feature.squeeze(dim=2)  # [1, 8]
+        print("cnn_feature.shape:",cnn_feature.shape)
         # cnn_feature = th.clamp(cnn_feature,-1,2)
         # cnn_feature = self.batch_layer(cnn_feature)
 
@@ -224,6 +238,7 @@ class CNN_GAP_BN(BaseFeaturesExtractor):
 
         x = th.cat((cnn_feature, state_feature), dim=1)
         self.feature_all = x  # use  to update feature before FC
+        print("custom_policy_CNN_GAP_BN:x.shape:",x.shape)
 
         return x
 
@@ -265,6 +280,8 @@ class CustomNoCNN(BaseFeaturesExtractor):
         x = th.cat((cnn_feature, state_feature), dim=1)
         # print(x)
         self.feature_all = x  # use  to update feature before FC
+        print("custom_policy_CustomNoCNN:x.shape:",x.shape)
+
 
         return x
 
@@ -336,7 +353,7 @@ class CNN_FC(BaseFeaturesExtractor):
 
         x = th.cat((cnn_feature, state_feature), dim=1)
         self.feature_all = x  # use  to update feature before FC
-        # print(x)
+        print("custom_policy_CNN_FC:x.shape:",x.shape)
 
         return x
 
@@ -405,11 +422,13 @@ class CNN_MobileNet(BaseFeaturesExtractor):
         x = th.cat((cnn_feature, state_feature), dim=1)
         self.feature_all = x  # use  to update feature before FC
         # print(x)
+        print("custom_policy_CNN_MobileNet:x.shape:",x.shape)
 
         return x
 
 
 class CNN_GAP_new(BaseFeaturesExtractor):
+
     """
     :param observation_space: (gym.Space)
     :param features_dim: (int) Number of features extracted.
@@ -465,3 +484,211 @@ class CNN_GAP_new(BaseFeaturesExtractor):
         self.feature_all = x  # use  to update feature before FC
 
         return x
+
+
+class CNNFeatureExtractor(nn.Module):
+    """
+    :param observation_space: (gym.Space)
+    :param features_dim: (int) Number of features extracted.
+        This corresponds to the number of unit for the last layer.
+    """
+
+    def __init__(self):
+        super(CNNFeatureExtractor, self).__init__()
+
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(3, 8, kernel_size=3, stride=1, padding='same'),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2)  # [1, 8, 40, 50]
+        )
+
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(8, 16, kernel_size=3, stride=1, padding='same'),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2),  # [1, 16, 20, 25]
+            # nn.BatchNorm2d(8, affine=False)
+        )
+
+        self.conv3 = nn.Sequential(
+            nn.Conv2d(16, 128, kernel_size=3,
+                      stride=1, padding='same'),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2),  # [1, self.feature_num_cnn, 10, 12]
+        )
+        self.gap_layer = nn.AvgPool2d(kernel_size=(10, 12), stride=1)
+
+        self.batch_layer = nn.BatchNorm1d(128)
+
+        # nn.init.kaiming_normal_(self.conv1[0].weight, a=0, mode='fan_in')
+        # nn.init.kaiming_normal_(self.conv2[0].weight, a=0, mode='fan_in')
+        # nn.init.kaiming_normal_(self.conv3[0].weight, a=0, mode='fan_in')
+        # nn.init.constant(self.conv1[0].bias, 0.0)
+        # nn.init.constant(self.conv2[0].bias, 0.0)
+        # nn.init.constant(self.conv3[0].bias, 0.0)
+
+        # nn.init.xavier_uniform(self.conv1[0].weight)
+        # nn.init.xavier_uniform(self.conv2[0].weight)
+        # nn.init.xavier_uniform(self.conv3[0].weight)
+        # self.conv1[0].bias.data.fill_(0)
+        # self.conv2[0].bias.data.fill_(0)
+        # self.conv3[0].bias.data.fill_(0)
+        # self.soft_max_layer = nn.Softmax(dim=1)
+        # self.batch_norm_layer = nn.BatchNorm1d(16, affine=False)
+
+        # self.linear = self.cnn
+
+    def forward(self, observations: th.Tensor) -> th.Tensor:
+        depth_img = observations[:, 0:3, :, :]
+        print(depth_img.shape)
+
+        self.layer_1_out = self.conv1(depth_img)
+        self.layer_2_out = self.conv2(self.layer_1_out)
+        self.layer_3_out = self.conv3(self.layer_2_out)
+        self.gap_layer_out = self.gap_layer(self.layer_3_out)
+
+        cnn_feature = self.gap_layer_out  # [1, 8, 1, 1]
+        print("cnn_feature.shape:",cnn_feature.shape)
+
+        cnn_feature = cnn_feature.squeeze(dim=3)  # [1, 8, 1]
+        x = cnn_feature.squeeze(dim=2)  # [1, 8]
+        print("custom_policy_CNN_GAP:x.shape:",x.shape)
+
+
+        self.feature_all = x  # use  to update feature before FC
+
+        return x
+
+
+class Transformer(BaseFeaturesExtractor):
+    def __init__(self, observation_space: gym.spaces.Box, features_dim=256, transformer_dim=128, state_feature_dim = 0, num_layers=2, num_heads=4):
+        super(Transformer, self).__init__(observation_space, features_dim)
+        
+        assert state_feature_dim > 0
+        self.feature_num_state = state_feature_dim
+        self.feature_num_cnn = features_dim - state_feature_dim
+        self.feature_all = None
+
+        self.cnn = CNNFeatureExtractor()
+
+        # Transformer 层
+        encoder_layer = nn.TransformerEncoderLayer(d_model=transformer_dim, nhead=num_heads)
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+
+        self.fc = nn.Linear(transformer_dim, self.feature_num_cnn)
+
+    def forward(self, observations: th.Tensor) -> th.Tensor:
+        batch_size = observations.shape[0]
+
+        # CNN 提取特征
+        cnn_out = self.cnn(observations)  # shape: (batch_size, transformer_dim)
+
+        # Transformer 需要 (seq_len, batch_size, feature_dim) 格式
+        cnn_out = cnn_out.unsqueeze(0)  # 增加时间序列维度: (1, batch_size, transformer_dim)
+
+        # Transformer 处理
+        transformer_out = self.transformer(cnn_out)
+        transformer_out = self.fc(transformer_out.squeeze(0))
+        print("transformer:transformer_out.shape", transformer_out.shape)
+
+        state_feature = observations[:, 1, 0, 0, 0:self.feature_num_state]
+
+        x = th.cat((transformer_out, state_feature), dim = 1)
+        self.feature_all = x
+        print("transformer:x.shape", x.shape)
+        return x
+
+class TransformerFeaturesExtractor(BaseFeaturesExtractor):
+    """
+    自定义的 Transformer 特征提取器，将观测数据经过全连接层映射到隐藏维度后，
+    通过 Transformer Encoder 进行特征提取，最后输出指定维度的特征。
+    """
+    def __init__(self, observation_space: gym.spaces.Box, features_dim: int = 256, state_feature_dim = 0,
+                 hidden_dim: int = 128, nhead: int = 4, num_layers: int = 2):
+        # 调用父类构造函数，features_dim 表示最终输出的特征维度
+        super(TransformerFeaturesExtractor, self).__init__(observation_space, features_dim)
+
+        assert state_feature_dim > 0
+        self.feature_num_state = state_feature_dim
+        self.feature_num_cnn = features_dim - state_feature_dim
+        self.feature_all = None
+
+        self.channels = observation_space.shape[0]  # e.g., 3
+        self.height = observation_space.shape[1]      # 60
+        self.width = observation_space.shape[2]  
+
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(1, 8, kernel_size=3, stride=1, padding='same'),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2)  # [1, 8, 40, 50]
+        )
+
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(8, 16, kernel_size=3, stride=1, padding='same'),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2),  # [1, 16, 20, 25]
+            # nn.BatchNorm2d(8, affine=False)
+        )
+
+        self.conv3 = nn.Sequential(
+            nn.Conv2d(16, hidden_dim, kernel_size=3,
+                      stride=1, padding='same'),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2),  # [1, self.feature_num_cnn, 10, 12]
+        )
+        self.gap_layer = nn.AvgPool2d(kernel_size=(10, 12), stride=1)
+
+        self.batch_layer = nn.BatchNorm1d(hidden_dim)
+
+        # 构造 Transformer Encoder：输入维度为 hidden_dim，序列长度为 num_patches
+        encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=nhead)
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        # 最后将 Transformer 输出聚合并映射到 features_dim
+        self.fc = nn.Linear(hidden_dim, self.feature_num_cnn)
+
+    def forward(self, observations: th.Tensor) -> th.Tensor:
+        """
+        observations 的形状为 [batch_size, observation_dim]
+        Transformer 需要的输入形状为 [sequence_length, batch_size, d_model]，
+        此处我们可以将每个观测视为长度为1的序列。
+        """
+        depth_img = observations[:, 0:1, :, :]  # [1, 1, 80, 100]
+        
+        #print("depth_img.shape",depth_img.shape) 
+
+        self.layer_1_out = self.conv1(depth_img)
+        #print("1")
+        self.layer_2_out = self.conv2(self.layer_1_out)
+        #print("2")
+        self.layer_3_out = self.conv3(self.layer_2_out)
+        #print("3")
+        self.gap_layer_out = self.gap_layer(self.layer_3_out)
+        #print("4, self.gap_layer_out.shape", self.gap_layer_out.shape)
+        #self.batch_layer_out = self.batch_layer(self.gap_layer_out)
+        #print("self.batch_layer_out.shape", self.batch_layer_out.shape)
+        batch_size, hidden_dim, h, w = self.gap_layer_out.shape
+        transformer_feature = self.gap_layer_out.view(batch_size, hidden_dim, -1)   # [batch, hidden_dim, num_patches]
+        #print("5, transformer_feature.shape", transformer_feature.shape)
+        
+        transformer_feature = transformer_feature.permute(2, 0, 1) 
+        #print("6, transformer_feature.shape", transformer_feature.shape)
+
+
+        transformer_feature = self.transformer_encoder(transformer_feature)
+        #print("7, transformer_feature.shape", transformer_feature.shape)
+
+                  # [1, batch, hidden_dim]
+        transformer_feature = transformer_feature.mean(dim=0)                       # [batch, hidden_dim]
+        transformer_feature = F.relu(transformer_feature)
+        transformer_feature = self.fc(transformer_feature)                           # [batch, features_dim]
+
+        state_feature = observations[:, 1, 0, 0:self.feature_num_state]
+        # transfer state feature from 0~1 to -1~1
+        # state_feature = state_feature*2 - 1
+
+        x = th.cat((transformer_feature, state_feature), dim=1)
+        #print("custom_policy_CNN_GAP:x.shape:",x.shape)
+
+        return x
+        
+
+

@@ -22,11 +22,17 @@ def get_parser():
 
 def main():
     # select your config file here
-    # config_file = 'configs/config_SimpleAvoid_SimpleMultirotor.ini'
-    # config_file = 'configs/config_fixedwing.ini'
-    config_file = 'configs/config_Maze_SimpleMultirotor_2D.ini'
+    #config_file = 'configs/config_SimpleAvoid_SimpleMultirotor.ini'
+    #config_file = 'configs/config_fixedwing.ini'
+    #config_file = 'configs/config_Maze_SimpleMultirotor_2D.ini'
+    #config_file = 'configs/config_NH_center_SimpleMultirotor_3D.ini'
+    config_file = 'configs/config_city.ini'
+    import os
+    print(os.getcwd())
 
     # 1. Create the qt thread
+    local_path = "C:/RL_Project/UAV_Navigation_DRL_AirSim/"
+    config_file = local_path + config_file
     app = QtWidgets.QApplication(sys.argv)
     gui = TrainingUi(config_file)
     gui.show()

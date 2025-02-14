@@ -1,4 +1,4 @@
-from .custom_policy_sb3 import CNN_FC, CNN_GAP, CNN_GAP_BN, No_CNN, CNN_MobileNet, CNN_GAP_new
+from .custom_policy_sb3 import CNN_FC, CNN_GAP, CNN_GAP_BN, No_CNN, CNN_MobileNet, CNN_GAP_new, Transformer, TransformerFeaturesExtractor
 import datetime
 import gym
 import gym_env
@@ -114,18 +114,21 @@ class TrainingThread(QtCore.QThread):
         if policy_name == 'mlp':
             policy_base = 'MlpPolicy'
             policy_kwargs = dict(activation_fn=activation_function)
+ 
         else:
             policy_base = 'CnnPolicy'
             if policy_name == 'CNN_FC':
                 policy_used = CNN_FC
             elif policy_name == 'CNN_GAP':
-                policy_used = CNN_GAP_new
+                policy_used = CNN_GAP
             elif policy_name == 'CNN_GAP_BN':
                 policy_used = CNN_GAP_BN
             elif policy_name == 'CNN_MobileNet':
                 policy_used = CNN_MobileNet
             elif policy_name == 'No_CNN':
                 policy_used = No_CNN
+            elif policy_name == "Transformer":
+                policy_used = TransformerFeaturesExtractor
             else:
                 raise Exception('policy select error: ', policy_name)
 

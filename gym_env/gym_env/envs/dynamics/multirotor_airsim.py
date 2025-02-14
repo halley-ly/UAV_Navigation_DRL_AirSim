@@ -53,6 +53,9 @@ class MultirotorDynamicsAirsim():
         self.yaw_rate_max_deg = cfg.getfloat('multirotor', 'yaw_rate_max_deg')
         self.yaw_rate_max_rad = math.radians(self.yaw_rate_max_deg)
         self.max_vertical_difference = 5
+
+        self.env_name = cfg.get('options', 'env_name')
+
         
         if self.navigation_3d:
             if self.using_velocity_state:
@@ -74,7 +77,19 @@ class MultirotorDynamicsAirsim():
     def reset(self):
         self.client.reset()
         # reset goal
-        self.update_goal_pose()
+        if self.env_name == 'City_400':
+            #对角线更新随机更新起点终点
+            #self.update_start_goal_rect(size=200)
+            #固定起点终点
+            self.update_start_goal_fixed() 
+        elif self.env_name == 'Tree_200':
+            self.update_start_goal_rect(size=80)
+        elif self.env_name == 'Forest':
+            self.update_start_goal_rect(size=90)
+        else:
+            #其他如果是原点画圈更新的
+            self.update_goal_pose()
+
 
         # reset start
         yaw_noise = self.start_random_angle * np.random.random()
@@ -130,6 +145,69 @@ class MultirotorDynamicsAirsim():
                         
         self.client.simPause(True)
 
+    def update_start_goal_rect(self, size):
+        #给定目标点的更新
+        rect = [-size, -size, size, size]
+        noise = np.random.random() * 2 - 1  # (-1,1)
+        angle = noise * math.pi  # -pi~pi
+
+        if abs(angle) == math.pi/2:
+            goal_x = 0
+            if angle > 0:
+                goal_y = rect[3]
+            else:
+                goal_y = rect[1]
+        if abs(angle) <= math.pi/4:
+            goal_x = rect[2]
+            goal_y = goal_x*math.tan(angle)
+        elif abs(angle) > math.pi/4 and abs(angle) <= math.pi/4*3:
+            if angle > 0:
+                goal_y = rect[3]
+                goal_x = goal_y/math.tan(angle)
+            else:
+                goal_y = rect[1]
+                goal_x = goal_y/math.tan(angle)
+        else:
+            goal_x = rect[0]
+            goal_y = goal_x * math.tan(angle)
+
+        self.start_position[0] = -goal_x
+        self.start_position[1] = -goal_y
+        self.goal_position[0] = goal_x
+        self.goal_position[1] = goal_y
+        self.goal_position[2] = self.start_position[2]
+
+        self.goal_distance = math.sqrt(goal_x*goal_x + goal_y*goal_y) * 2
+
+        yaw_noise = (np.random.random() * 2 - 1) * math.radians(40)
+        self.yaw = angle + yaw_noise
+
+        if self.yaw > math.pi:
+            self.yaw = self.yaw - math.pi * 2
+        elif self.yaw < -math.pi:
+            self.yaw = self.yaw + math.pi * 2
+
+    def update_start_goal_fixed(self):
+        #固定目标点与终点
+        goal_x = 0
+        goal_y = -200
+
+        self.start_position[0] = -goal_x
+        self.start_position[1] = -goal_y
+        self.goal_position[0] = goal_x
+        self.goal_position[1] = goal_y
+        self.goal_position[2] = self.start_position[2]
+
+        self.goal_distance = math.sqrt(goal_x*goal_x + goal_y*goal_y) * 2
+
+        yaw_noise = (np.random.random() * 2 - 1) * math.radians(40)
+        self.yaw =  yaw_noise
+
+        if self.yaw > math.pi:
+            self.yaw = self.yaw - math.pi * 2
+        elif self.yaw < -math.pi:
+            self.yaw = self.yaw + math.pi * 2
+
     def update_goal_pose(self):
         # if goal is given by rectangular mode
         if self.goal_rect is None:
@@ -156,6 +234,8 @@ class MultirotorDynamicsAirsim():
         self.goal_random_angle = random_angle
         if rect is not None:
             self.goal_rect = rect
+    def _set_goal_pose_single(self, goal):
+        self.goal_position = [goal[0], goal[1], goal[2]]
             
     def get_goal_from_rect(self, rect_set, random_angle_set):
         rect = rect_set
